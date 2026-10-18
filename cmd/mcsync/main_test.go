@@ -268,3 +268,26 @@ func TestUsageErrors(t *testing.T) {
 	}
 	_ = io.Discard
 }
+
+func TestRunWithMissingServerJarSaysSoAndReleasesLease(t *testing.T) {
+	svc := &memService{inviteOK: true, versions: map[uint64][]byte{}}
+	srv := httptest.NewServer(svc)
+	defer srv.Close()
+	cfg := filepath.Join(t.TempDir(), "c.json")
+	b, _ := json.Marshal(config{Addr: srv.Listener.Addr().String(), Token: "tok-uno", DeviceID: "dev-uno", Player: "Fede"})
+	if err := os.WriteFile(cfg, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	world := filepath.Join(t.TempDir(), "mondo")
+	c, o, e := cli(t, context.Background(), "run", "--config", cfg, "--world", world,
+		"--server-jar", filepath.Join(t.TempDir(), "non-c-e.jar"))
+	if c != 1 || !strings.Contains(e, "server.jar non trovato") {
+		t.Fatalf("code=%d out=%q err=%q", c, o, e)
+	}
+	if strings.Contains(o, "Fatto") {
+		t.Error("ha stampato \"Fatto\" anche se il gioco non è partito")
+	}
+	if svc.holder != "" || svc.pointer != 0 {
+		t.Errorf("holder=%q pointer=%d: lease da rilasciare, niente versioni", svc.holder, svc.pointer)
+	}
+}

@@ -3,7 +3,9 @@
 //
 //	mcsync enroll CODICE [--label NOME]   si iscrive al servizio con il codice di invito
 //	mcsync status                         mostra chi è host e l'ultima versione
-//	mcsync run --world DIR                prende la lease, scarica il mondo, gioca, salva
+//	mcsync run --world DIR [--server-jar JAR --java JAVA --jvm-args "-Xmx2G"]
+//	                                      prende la lease, scarica il mondo, gioca, salva
+//	                                      (senza --server-jar: gioco finto)
 //
 // Il token del dispositivo sta in un file di configurazione solo per il
 // proprietario (default: cartella di configurazione dell'utente).
@@ -250,6 +252,9 @@ func cmdRun(ctx context.Context, args []string, out, errw io.Writer) error {
 	uploadEvery := fs.Duration("upload-every", 10*time.Minute, "ogni quanto salvare sul laptop")
 	hbEvery := fs.Duration("heartbeat-every", time.Minute, "ogni quanto rinnovare la lease")
 	fakeEvery := fs.Duration("fake-every", 2*time.Second, "ogni quanto il gioco finto scrive")
+	jar := fs.String("server-jar", "", "percorso di server.jar: se c'è si usa il server Minecraft vero, altrimenti il gioco finto")
+	java := fs.String("java", "java", "programma java del server (es. C:\\...\\java.exe)")
+	jvmArgs := fs.String("jvm-args", "", "opzioni per la JVM, separate da spazi (es. \"-Xmx2G\")")
 	verbose := fs.Bool("v", false, "log più dettagliato")
 	if err := parse(fs, args); err != nil {
 		return err
@@ -266,12 +271,22 @@ func cmdRun(ctx context.Context, args []string, out, errw io.Writer) error {
 		level = slog.LevelDebug
 	}
 	log := slog.New(slog.NewTextHandler(errw, &slog.HandlerOptions{Level: level}))
-	g := agent.NewFakeGame()
-	g.Every = *fakeEvery
+	var game agent.Game
+	if *jar != "" {
+		mg := agent.NewMinecraftGame(*java, *jar)
+		mg.JVMArgs = strings.Fields(*jvmArgs)
+		mg.Log = log
+		game = mg
+	} else {
+		fg := agent.NewFakeGame()
+		fg.Every = *fakeEvery
+		game = fg
+		fmt.Fprintln(out, "Gioco finto (nessun --server-jar): non è Minecraft.")
+	}
 	fmt.Fprintf(out, "Sessione di %s. Ctrl+C per chiudere: il mondo viene salvato prima di rilasciare la lease.\n", c.Player)
 
 	err = agent.Run(ctx, cl, agent.Options{
-		World: *world, WorkDir: *workDir, Game: g, Log: log,
+		World: *world, WorkDir: *workDir, Game: game, Log: log,
 		UploadEvery: *uploadEvery, HeartbeatEvery: *hbEvery,
 	})
 	var held *agent.LeaseHeldError
@@ -280,6 +295,8 @@ func cmdRun(ctx context.Context, args []string, out, errw io.Writer) error {
 		fmt.Fprintln(out, "Fatto: mondo salvato e lease rilasciata.")
 	case errors.As(err, &held):
 		return fmt.Errorf("non puoi giocare adesso: %w", err)
+	case errors.Is(err, agent.ErrGameNotStarted):
+		return fmt.Errorf("%w\nIl mondo non è stato toccato e la lease è stata rilasciata", err)
 	case errors.Is(err, agent.ErrNotSaved):
 		return fmt.Errorf("ATTENZIONE, mondo non salvato sul laptop: %s\nLa copia sul PC è al sicuro (cartella %s). Non cancellarla e riprova a lanciare mcsync run appena il laptop torna raggiungibile", strings.TrimSpace(err.Error()), *world)
 	default:

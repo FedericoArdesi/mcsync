@@ -71,6 +71,9 @@ var (
 	ErrLeaseLost = errors.New("la lease non è più tua")
 	// ErrIsolated: troppo tempo senza notizie del laptop (auto-blocco).
 	ErrIsolated = errors.New("laptop irraggiungibile da troppo tempo")
+	// ErrGameNotStarted: il gioco non è partito. Il mondo non è stato toccato e
+	// la lease è stata rilasciata.
+	ErrGameNotStarted = errors.New("il gioco non è partito")
 	// ErrNotSaved: il salvataggio finale non è riuscito; la lease non è stata
 	// rilasciata e il mondo locale resta segnato come non confermato.
 	ErrNotSaved = errors.New("salvataggio finale non riuscito")
@@ -225,18 +228,26 @@ func Run(ctx context.Context, r Remote, o Options) error {
 	}
 
 	// 4. gioco
+	wasDirty := s.st.Dirty
 	s.st.Dirty = true
 	if err := s.saveState(); err != nil {
 		s.releaseQuietly(ctx)
 		return err
 	}
 	if err := o.Game.Start(ctx, s.o.World); err != nil {
-		// il gioco non è partito: nessuna modifica, il mondo resta come era
+		// il gioco non è partito: nessuna modifica, il mondo resta come era e
+		// non c'è niente da caricare. Si rilascia la lease e si dice la verità
+		// a chi chiama: non è una sessione finita bene.
 		s.log.Error("il gioco non è partito", "errore", err)
 		if rerr := s.stopGame(ctx); rerr != nil {
 			s.log.Warn("stop del gioco", "errore", rerr)
 		}
-		return s.finish(ctx, nil)
+		s.st.Dirty = wasDirty
+		if serr := s.saveState(); serr != nil {
+			s.log.Warn("stato locale non salvato", "errore", serr)
+		}
+		s.releaseQuietly(ctx)
+		return fmt.Errorf("%w: %w", ErrGameNotStarted, err)
 	}
 	s.log.Info("gioco avviato: puoi giocare")
 
