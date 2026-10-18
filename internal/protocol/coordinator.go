@@ -56,6 +56,9 @@ type Version struct {
 	Device     string
 	Generation uint64
 	CreatedAt  time.Time
+	// Snapshot è l'identificativo della copia nell'archivio che contiene
+	// il contenuto di questa versione.
+	Snapshot string
 }
 
 // CommitRequest è la richiesta di rendere ufficiale un upload.
@@ -70,6 +73,9 @@ type CommitRequest struct {
 	BlocksVerified bool
 	// SizeBytes è lo spazio che la versione occuperà sul laptop.
 	SizeBytes int64
+	// Snapshot è l'identificativo della copia nell'archivio. Se il commit
+	// viene rifiutato, serve a ritrovare il contenuto dell'orfano.
+	Snapshot string
 }
 
 // Orphan è un commit rifiutato: il contenuto non si perde, va in orphans/ sul
@@ -205,6 +211,7 @@ func (c *Coordinator) Commit(req CommitRequest) (Version, error) {
 		Device:     req.Device,
 		Generation: req.Generation,
 		CreatedAt:  now,
+		Snapshot:   req.Snapshot,
 	}
 	c.versions = append(c.versions, v)
 	c.pointer = v.Number // passo atomico: il puntatore cambia sotto lo stesso lock
@@ -233,6 +240,16 @@ func (c *Coordinator) Versions() []Version {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]Version(nil), c.versions...)
+}
+
+// Version restituisce la versione ufficiale con quel numero (da 1 in poi).
+func (c *Coordinator) Version(n uint64) (Version, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if n == 0 || n > uint64(len(c.versions)) {
+		return Version{}, false
+	}
+	return c.versions[n-1], true
 }
 
 // Orphans restituisce una copia dei commit rifiutati.
