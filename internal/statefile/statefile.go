@@ -12,10 +12,8 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
-	"runtime"
-	"time"
 
+	"mcsync/internal/atomicfile"
 	"mcsync/internal/protocol"
 )
 
@@ -33,45 +31,13 @@ func New(path string) *Store { return &Store{path: path} }
 // Path restituisce il percorso del file di stato.
 func (s *Store) Path() string { return s.path }
 
-// Save scrive lo stato in un file temporaneo accanto a quello vero, lo forza
-// su disco e poi lo rinomina sopra al vecchio. La rinomina è atomica: chi
-// legge, o chi si riavvia dopo un guasto, vede il file vecchio o quello nuovo.
+// Save scrive lo stato in modo atomico (vedi atomicfile.Write).
 func (s *Store) Save(st protocol.State) error {
 	data, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return err
 	}
-	data = append(data, '\n')
-
-	dir := filepath.Dir(s.path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	tmp := s.path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return err
-	}
-	if _, err := f.Write(data); err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmp)
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmp)
-		return err
-	}
-	if err := f.Close(); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	if err := renameReplace(tmp, s.path); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	syncDir(dir)
-	return nil
+	return atomicfile.Write(s.path, append(data, '\n'), 0o600)
 }
 
 // Load legge lo stato. Se il file non esiste restituisce found=false senza
@@ -107,36 +73,4 @@ func Open(path string, clock protocol.Clock, freeBytes func() int64) (*protocol.
 		return nil, fmt.Errorf("stato in %s: %w", path, err)
 	}
 	return c, nil
-}
-
-// renameReplace rinomina sopra un file esistente. Su Windows go usa
-// MoveFileEx con sostituzione, ma un antivirus che ha il file aperto può far
-// fallire il tentativo per un attimo: si riprova qualche volta.
-func renameReplace(from, to string) error {
-	var err error
-	for i := 0; i < 5; i++ {
-		if err = os.Rename(from, to); err == nil {
-			return nil
-		}
-		if runtime.GOOS != "windows" {
-			return err
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	return err
-}
-
-// syncDir forza su disco la rinomina (serve su Linux, dove gira il servizio).
-// È un passo in più "best effort": alcuni filesystem non lo supportano e su
-// Windows non si può, e il file di stato è comunque già al sicuro.
-func syncDir(dir string) {
-	if runtime.GOOS == "windows" {
-		return
-	}
-	d, err := os.Open(dir)
-	if err != nil {
-		return
-	}
-	_ = d.Sync()
-	_ = d.Close()
 }
