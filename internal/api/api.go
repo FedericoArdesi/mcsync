@@ -12,7 +12,13 @@
 // corpo della richiesta: un client non può parlare a nome di un altro.
 package api
 
-import "time"
+import (
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"strings"
+	"time"
+)
 
 // ProtocolVersion è la versione del protocollo di rete.
 const ProtocolVersion = 1
@@ -149,4 +155,38 @@ type UploadResponse struct {
 	AddedBytes int64   `json:"added_bytes"`
 	TotalBytes int64   `json:"total_bytes"`
 	Files      int     `json:"files"`
+}
+
+// Codice di invito (8.3): è quello che l'admin manda alla persona. Contiene
+// l'indirizzo del servizio e il segreto monouso; con questo l'agente si iscrive
+// e riceve il suo token personale. Il codice è un segreto: va mandato solo alla
+// persona interessata.
+const inviteCodePrefix = "mcs1."
+
+type inviteCode struct {
+	Addr   string `json:"addr"`
+	Invite string `json:"invite"`
+}
+
+// EncodeInviteCode costruisce il codice di invito da indirizzo e segreto.
+func EncodeInviteCode(addr, secret string) string {
+	b, _ := json.Marshal(inviteCode{Addr: addr, Invite: secret})
+	return inviteCodePrefix + base64.RawURLEncoding.EncodeToString(b)
+}
+
+// DecodeInviteCode legge un codice di invito.
+func DecodeInviteCode(code string) (addr, secret string, err error) {
+	raw, ok := strings.CutPrefix(strings.TrimSpace(code), inviteCodePrefix)
+	if !ok {
+		return "", "", errors.New("codice di invito non riconosciuto")
+	}
+	b, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return "", "", errors.New("codice di invito non riconosciuto")
+	}
+	var ic inviteCode
+	if err := json.Unmarshal(b, &ic); err != nil || ic.Addr == "" || ic.Invite == "" {
+		return "", "", errors.New("codice di invito non riconosciuto")
+	}
+	return ic.Addr, ic.Invite, nil
 }
