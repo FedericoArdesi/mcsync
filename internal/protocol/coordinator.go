@@ -5,10 +5,15 @@
 // È logica pura: niente rete, niente disco, niente Minecraft. L'unica fonte di
 // tempo è l'orologio del laptop (principio 4), iniettato tramite Clock, così i
 // test possono simulare scadenze e guasti senza aspettare.
+//
+// Lo stato può essere salvato da un Saver (vedi persist.go): il coordinatore
+// non sa dove né come, sa solo che una modifica è confermata quando il Saver
+// risponde senza errore.
 package protocol
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -42,40 +47,40 @@ func (SystemClock) Now() time.Time { return time.Now() }
 
 // Lease è la concessione a tempo che dice chi è host.
 type Lease struct {
-	Player     string
-	Device     string
-	Generation uint64
-	ExpiresAt  time.Time
+	Player     string    `json:"player"`
+	Device     string    `json:"device"`
+	Generation uint64    `json:"generation"`
+	ExpiresAt  time.Time `json:"expires_at"`
 }
 
 // Version è una versione ufficiale del mondo (metadati essenziali, 5.2).
 type Version struct {
-	Number     uint64
-	Parent     uint64
-	Author     string
-	Device     string
-	Generation uint64
-	CreatedAt  time.Time
+	Number     uint64    `json:"number"`
+	Parent     uint64    `json:"parent"`
+	Author     string    `json:"author"`
+	Device     string    `json:"device"`
+	Generation uint64    `json:"generation"`
+	CreatedAt  time.Time `json:"created_at"`
 	// Snapshot è l'identificativo della copia nell'archivio che contiene
 	// il contenuto di questa versione.
-	Snapshot string
+	Snapshot string `json:"snapshot"`
 }
 
 // CommitRequest è la richiesta di rendere ufficiale un upload.
 type CommitRequest struct {
-	Player     string
-	Device     string
-	Generation uint64
+	Player     string `json:"player"`
+	Device     string `json:"device"`
+	Generation uint64 `json:"generation"`
 	// Parent è la versione su cui si basa l'upload.
-	Parent uint64
+	Parent uint64 `json:"parent"`
 	// BlocksVerified dice che il livello di archiviazione ha controllato che i
 	// blocchi siano arrivati per intero e che gli hash corrispondano.
-	BlocksVerified bool
+	BlocksVerified bool `json:"blocks_verified"`
 	// SizeBytes è lo spazio che la versione occuperà sul laptop.
-	SizeBytes int64
+	SizeBytes int64 `json:"size_bytes"`
 	// Snapshot è l'identificativo della copia nell'archivio. Se il commit
 	// viene rifiutato, serve a ritrovare il contenuto dell'orfano.
-	Snapshot string
+	Snapshot string `json:"snapshot"`
 }
 
 // Orphan è un commit rifiutato: il contenuto non si perde, va in orphans/ sul
@@ -86,9 +91,11 @@ type Orphan struct {
 	At      time.Time
 }
 
-type reservation struct {
-	For   string
-	Until time.Time
+// Reservation dice che la lease, appena rilasciata, è riservata a un giocatore
+// fino a una certa ora (passaggio di host, 6.7).
+type Reservation struct {
+	For   string    `json:"for"`
+	Until time.Time `json:"until"`
 }
 
 // Coordinator tiene lo stato del protocollo. È sicuro per uso concorrente.
@@ -96,16 +103,19 @@ type Coordinator struct {
 	mu        sync.Mutex
 	clock     Clock
 	freeBytes func() int64 // spazio libero sul laptop; nil = illimitato
+	saver     Saver        // nil = lo stato non viene salvato
 
 	generation  uint64 // ultima generazione assegnata
 	lease       *Lease // nil se rilasciata o mai presa
-	reservation *reservation
+	reservation *Reservation
 	pointer     uint64 // versione ufficiale corrente (0 = nessuna)
 	versions    []Version
 	orphans     []Orphan
 }
 
-// NewCoordinator crea un coordinatore. freeBytes può essere nil.
+// NewCoordinator crea un coordinatore che tiene lo stato solo in memoria.
+// freeBytes può essere nil. Per uno stato che sopravvive ai riavvii si usa
+// NewPersistent.
 func NewCoordinator(clock Clock, freeBytes func() int64) *Coordinator {
 	return &Coordinator{clock: clock, freeBytes: freeBytes}
 }
@@ -118,10 +128,14 @@ func (c *Coordinator) Acquire(player, device string) (Lease, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	now := c.clock.Now()
+	u := c.markLocked()
 
 	if c.lease != nil && now.Before(c.lease.ExpiresAt) {
 		if c.lease.Player == player && c.lease.Device == device {
 			c.lease.ExpiresAt = now.Add(LeaseTTL)
+			if err := c.persistLocked(u); err != nil {
+				return Lease{}, err
+			}
 			return *c.lease, nil
 		}
 		return Lease{}, ErrHeld
@@ -142,6 +156,9 @@ func (c *Coordinator) Acquire(player, device string) (Lease, error) {
 		ExpiresAt:  now.Add(LeaseTTL),
 	}
 	c.lease = &l
+	if err := c.persistLocked(u); err != nil {
+		return Lease{}, err
+	}
 	return l, nil
 }
 
@@ -153,7 +170,11 @@ func (c *Coordinator) Heartbeat(player, device string, gen uint64) (Lease, error
 	if err := c.checkHolderLocked(player, device, gen); err != nil {
 		return Lease{}, err
 	}
+	u := c.markLocked()
 	c.lease.ExpiresAt = c.clock.Now().Add(LeaseTTL)
+	if err := c.persistLocked(u); err != nil {
+		return Lease{}, err
+	}
 	return *c.lease, nil
 }
 
@@ -169,17 +190,21 @@ func (c *Coordinator) Release(player, device string, gen uint64, handoffTo strin
 	if c.lease.Generation != gen || c.lease.Player != player || c.lease.Device != device {
 		return ErrStaleGeneration
 	}
+	u := c.markLocked()
 	c.lease = nil
 	if handoffTo != "" {
-		c.reservation = &reservation{For: handoffTo, Until: c.clock.Now().Add(HandoffReservation)}
+		c.reservation = &Reservation{For: handoffTo, Until: c.clock.Now().Add(HandoffReservation)}
 	}
-	return nil
+	return c.persistLocked(u)
 }
 
 // Commit rende ufficiale un upload se supera i controlli di 6.2:
 // blocchi integri, generazione corrente, base uguale al puntatore (compare-and-swap),
 // spazio sufficiente. Un commit rifiutato (tranne per blocchi incompleti, che
 // riprendono) viene registrato come orfano.
+//
+// Se lo stato non si riesce a salvare, il commit non avviene: la versione non
+// esiste e il puntatore resta dov'era (l'errore contiene ErrPersist).
 func (c *Coordinator) Commit(req CommitRequest) (Version, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -190,7 +215,12 @@ func (c *Coordinator) Commit(req CommitRequest) (Version, error) {
 	}
 
 	reject := func(err error) (Version, error) {
+		u := c.markLocked()
 		c.orphans = append(c.orphans, Orphan{Request: req, Reason: err, At: now})
+		if perr := c.persistLocked(u); perr != nil {
+			// l'orfano non è stato registrato: si riportano entrambi gli errori
+			return Version{}, fmt.Errorf("%w; %w", err, perr)
+		}
 		return Version{}, err
 	}
 
@@ -204,6 +234,7 @@ func (c *Coordinator) Commit(req CommitRequest) (Version, error) {
 		return reject(ErrNoSpace)
 	}
 
+	u := c.markLocked()
 	v := Version{
 		Number:     uint64(len(c.versions)) + 1,
 		Parent:     req.Parent,
@@ -214,7 +245,10 @@ func (c *Coordinator) Commit(req CommitRequest) (Version, error) {
 		Snapshot:   req.Snapshot,
 	}
 	c.versions = append(c.versions, v)
-	c.pointer = v.Number // passo atomico: il puntatore cambia sotto lo stesso lock
+	c.pointer = v.Number // versione e puntatore cambiano insieme, nello stesso salvataggio
+	if err := c.persistLocked(u); err != nil {
+		return Version{}, err
+	}
 	return v, nil
 }
 
