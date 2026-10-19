@@ -193,6 +193,7 @@ func (g *MinecraftGame) Start(ctx context.Context, world string) error {
 	args = append(args, "-jar", jar, "--nogui", "--universe", universe, "--world", name)
 	cmd := exec.Command(g.Java, args...)
 	cmd.Dir = dir
+	detachFromConsoleSignals(cmd)
 	pr, pw := io.Pipe()
 	cmd.Stdout, cmd.Stderr = pw, pw
 	stdin, err := cmd.StdinPipe()
