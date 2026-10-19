@@ -30,13 +30,14 @@ type Saver interface {
 // State è tutto ciò che il coordinatore deve ricordare dopo un riavvio.
 // Non contiene l'orologio né lo spazio libero: arrivano da fuori.
 type State struct {
-	Format      int           `json:"format"`
-	Generation  uint64        `json:"generation"`
-	Pointer     uint64        `json:"pointer"`
-	Lease       *Lease        `json:"lease,omitempty"`
-	Reservation *Reservation  `json:"reservation,omitempty"`
-	Versions    []Version     `json:"versions"`
-	Orphans     []OrphanState `json:"orphans"`
+	Format      int             `json:"format"`
+	Generation  uint64          `json:"generation"`
+	Pointer     uint64          `json:"pointer"`
+	Lease       *Lease          `json:"lease,omitempty"`
+	Reservation *Reservation    `json:"reservation,omitempty"`
+	Handoff     *HandoffRequest `json:"handoff,omitempty"`
+	Versions    []Version       `json:"versions"`
+	Orphans     []OrphanState   `json:"orphans"`
 }
 
 // OrphanState è un Orphan nella forma salvabile: il motivo del rifiuto è il
@@ -84,6 +85,10 @@ func NewPersistent(clock Clock, freeBytes func() int64, saver Saver, st *State) 
 		r := *st.Reservation
 		c.reservation = &r
 	}
+	if st.Handoff != nil {
+		h := *st.Handoff
+		c.handoff = &h
+	}
 	c.versions = append([]Version(nil), st.Versions...)
 	for _, o := range st.Orphans {
 		c.orphans = append(c.orphans, Orphan{Request: o.Request, Reason: reasonFromText(o.Reason), At: o.At})
@@ -113,6 +118,10 @@ func (c *Coordinator) stateLocked() State {
 	if c.reservation != nil {
 		r := *c.reservation
 		st.Reservation = &r
+	}
+	if c.handoff != nil {
+		h := *c.handoff
+		st.Handoff = &h
 	}
 	for _, o := range c.orphans {
 		st.Orphans = append(st.Orphans, OrphanState{Request: o.Request, Reason: o.Reason.Error(), At: o.At})
@@ -147,6 +156,14 @@ func (s State) validate() error {
 	if s.Reservation != nil && s.Reservation.For == "" {
 		return bad("riserva senza destinatario")
 	}
+	if h := s.Handoff; h != nil {
+		if h.From == "" || h.To == "" || h.ToDevice == "" {
+			return bad("richiesta di passaggio incompleta")
+		}
+		if s.Lease == nil || s.Lease.Player != h.From {
+			return bad("richiesta di passaggio senza la lease dell'host %q", h.From)
+		}
+	}
 	return nil
 }
 
@@ -157,6 +174,7 @@ type undo struct {
 	generation, pointer uint64
 	lease               *Lease
 	reservation         *Reservation
+	handoff             *HandoffRequest
 	versions, orphans   int
 }
 
@@ -170,12 +188,16 @@ func (c *Coordinator) markLocked() undo {
 		r := *c.reservation
 		u.reservation = &r
 	}
+	if c.handoff != nil {
+		h := *c.handoff
+		u.handoff = &h
+	}
 	return u
 }
 
 func (c *Coordinator) rollbackLocked(u undo) {
 	c.generation, c.pointer = u.generation, u.pointer
-	c.lease, c.reservation = u.lease, u.reservation
+	c.lease, c.reservation, c.handoff = u.lease, u.reservation, u.handoff
 	c.versions = c.versions[:u.versions]
 	c.orphans = c.orphans[:u.orphans]
 }

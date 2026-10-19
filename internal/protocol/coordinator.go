@@ -108,7 +108,8 @@ type Coordinator struct {
 	generation  uint64 // ultima generazione assegnata
 	lease       *Lease // nil se rilasciata o mai presa
 	reservation *Reservation
-	pointer     uint64 // versione ufficiale corrente (0 = nessuna)
+	handoff     *HandoffRequest // richiesta di passaggio in corso (handoff.go)
+	pointer     uint64          // versione ufficiale corrente (0 = nessuna)
 	versions    []Version
 	orphans     []Orphan
 }
@@ -148,6 +149,7 @@ func (c *Coordinator) Acquire(player, device string) (Lease, error) {
 		c.reservation = nil // consumata o scaduta
 	}
 
+	c.handoff = nil // una richiesta appartiene alla lease precedente
 	c.generation++
 	l := Lease{
 		Player:     player,
@@ -192,6 +194,7 @@ func (c *Coordinator) Release(player, device string, gen uint64, handoffTo strin
 	}
 	u := c.markLocked()
 	c.lease = nil
+	c.handoff = nil // con la lease finisce anche la richiesta
 	if handoffTo != "" {
 		c.reservation = &Reservation{For: handoffTo, Until: c.clock.Now().Add(HandoffReservation)}
 	}
