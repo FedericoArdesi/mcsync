@@ -30,13 +30,15 @@ const (
 )
 
 const (
-	PathEnroll    = "/v1/enroll"          // POST, senza token
-	PathStatus    = "/v1/status"          // GET
-	PathAcquire   = "/v1/lease/acquire"   // POST
-	PathHeartbeat = "/v1/lease/heartbeat" // POST
-	PathRelease   = "/v1/lease/release"   // POST
-	PathUpload    = "/v1/upload"          // POST, corpo: flusso di tarutil.Pack
-	PathDownload  = "/v1/download"        // GET, risposta: flusso di tarutil.Pack
+	PathEnroll         = "/v1/enroll"          // POST, senza token
+	PathStatus         = "/v1/status"          // GET
+	PathAcquire        = "/v1/lease/acquire"   // POST
+	PathHeartbeat      = "/v1/lease/heartbeat" // POST
+	PathRelease        = "/v1/lease/release"   // POST
+	PathUpload         = "/v1/upload"          // POST, corpo: flusso di tarutil.Pack
+	PathDownload       = "/v1/download"        // GET, risposta: flusso di tarutil.Pack
+	PathHandoffRequest = "/v1/handoff/request" // POST, senza corpo: chiede di diventare host
+	PathHandoffCancel  = "/v1/handoff/cancel"  // POST, senza corpo: ritira la richiesta
 )
 
 // Parametri dell'indirizzo.
@@ -59,6 +61,10 @@ const (
 	CodeLeaseExpired    = "lease_expired"
 	CodeStaleGeneration = "stale_generation"
 	CodeParentMismatch  = "parent_mismatch"
+	CodeAlreadyHost     = "already_host"
+	CodeHandoffPending  = "handoff_pending"
+	CodeNoHandoff       = "no_handoff"
+	CodeNotRequester    = "not_requester"
 	CodeNoSpace         = "no_space"
 	CodeNoVersion       = "no_version" // non esiste ancora nessuna versione ufficiale
 	CodeUnknownVersion  = "unknown_version"
@@ -108,6 +114,9 @@ type Lease struct {
 	Generation       uint64    `json:"generation"`
 	ExpiresAt        time.Time `json:"expires_at"`
 	ExpiresInSeconds int       `json:"expires_in_seconds"`
+	// Handoff c'è solo nella risposta al heartbeat, se qualcuno ha chiesto di
+	// diventare host: così l'host lo vede senza chiamate in più.
+	Handoff *HandoffRequest `json:"handoff,omitempty"`
 }
 
 type Reservation struct {
@@ -125,6 +134,15 @@ type Version struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+// HandoffRequest è la richiesta di passaggio di host in corso (6.7): un
+// giocatore chiede di diventare host mentre un altro ospita.
+type HandoffRequest struct {
+	From     string    `json:"from"`
+	To       string    `json:"to"`
+	ToDevice string    `json:"to_device"`
+	At       time.Time `json:"at"`
+}
+
 type Status struct {
 	Protocol   int       `json:"protocol"`
 	ServerTime time.Time `json:"server_time"`
@@ -135,6 +153,8 @@ type Status struct {
 	// Lease è la lease in corso; assente se libera o scaduta.
 	Lease       *Lease       `json:"lease,omitempty"`
 	Reservation *Reservation `json:"reservation,omitempty"`
+	// Handoff è la richiesta di passaggio in corso, se c'è.
+	Handoff *HandoffRequest `json:"handoff,omitempty"`
 }
 
 // HeartbeatRequest e ReleaseRequest portano solo la generazione: giocatore e
