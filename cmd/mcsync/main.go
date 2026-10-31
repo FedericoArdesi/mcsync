@@ -56,6 +56,7 @@ comandi:
   enroll CODICE   iscrive questo PC con il codice di invito (--label NOME)
   status          mostra lo stato del servizio
   run             avvia una sessione (--world CARTELLA)
+  handoff         chiede a chi gioca di passarti la mano, poi avvia la sessione (come run)
 
 opzioni comuni:
   --config FILE   file di configurazione (default: cartella di configurazione dell'utente)
@@ -77,6 +78,8 @@ func run(ctx context.Context, args []string, out, errw io.Writer) int {
 		err = cmdStatus(ctx, rest, out, errw)
 	case "run":
 		err = cmdRun(ctx, rest, out, errw)
+	case "handoff":
+		err = cmdHandoff(ctx, rest, out, errw)
 	case "help", "-h", "--help":
 		usage(out)
 		return 0
@@ -246,7 +249,22 @@ func cmdStatus(ctx context.Context, args []string, out, errw io.Writer) error {
 }
 
 func cmdRun(ctx context.Context, args []string, out, errw io.Writer) error {
-	fs, cfgFlag := newFlags("run", errw)
+	return runSession(ctx, args, out, errw, false)
+}
+
+// cmdHandoff è run preceduto dalla richiesta di passaggio di host (6.7): se
+// qualcun altro sta giocando gli chiede di salvare e passare la mano, aspetta,
+// poi parte come run. Accetta le stesse opzioni di run.
+func cmdHandoff(ctx context.Context, args []string, out, errw io.Writer) error {
+	return runSession(ctx, args, out, errw, true)
+}
+
+func runSession(ctx context.Context, args []string, out, errw io.Writer, handoff bool) error {
+	name := "run"
+	if handoff {
+		name = "handoff"
+	}
+	fs, cfgFlag := newFlags(name, errw)
 	world := fs.String("world", "", "cartella del mondo su questo PC (obbligatoria)")
 	workDir := fs.String("work", "", "cartella di lavoro (default: MONDO.mcsync)")
 	uploadEvery := fs.Duration("upload-every", 10*time.Minute, "ogni quanto salvare sul laptop")
@@ -256,6 +274,11 @@ func cmdRun(ctx context.Context, args []string, out, errw io.Writer) error {
 	java := fs.String("java", "java", "programma java del server (es. C:\\...\\java.exe)")
 	jvmArgs := fs.String("jvm-args", "", "opzioni per la JVM, separate da spazi (es. \"-Xmx2G\")")
 	verbose := fs.Bool("v", false, "log più dettagliato")
+	var waitMax, poll time.Duration
+	if handoff {
+		fs.DurationVar(&waitMax, "handoff-timeout", 5*time.Minute, "quanto aspettare che l'host passi la mano prima di ritirare la richiesta")
+		fs.DurationVar(&poll, "handoff-poll", 3*time.Second, "ogni quanto controllare se l'host ha passato la mano")
+	}
 	if err := parse(fs, args); err != nil {
 		return err
 	}
@@ -265,6 +288,11 @@ func cmdRun(ctx context.Context, args []string, out, errw io.Writer) error {
 	cl, c, err := connect(*cfgFlag)
 	if err != nil {
 		return err
+	}
+	if handoff {
+		if err := waitForHandoff(ctx, cl, waitMax, poll, out); err != nil {
+			return err
+		}
 	}
 	level := slog.LevelInfo
 	if *verbose {
