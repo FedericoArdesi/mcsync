@@ -7,8 +7,8 @@ import (
 	"io"
 	"time"
 
-	"mcsync/internal/api"
-	"mcsync/internal/client"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/client"
 )
 
 // handoffAPI è la parte del servizio che serve a chiedere il passaggio di host.

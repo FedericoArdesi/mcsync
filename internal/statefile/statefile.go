@@ -13,8 +13,8 @@ import (
 	"io/fs"
 	"os"
 
-	"mcsync/internal/atomicfile"
-	"mcsync/internal/protocol"
+	"github.com/FedericoArdesi/mcsync/internal/atomicfile"
+	"github.com/FedericoArdesi/mcsync/internal/protocol"
 )
 
 // Store salva e carica lo stato in un file. Implementa protocol.Saver.

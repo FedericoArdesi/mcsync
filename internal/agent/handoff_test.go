@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/api"
 )
 
 // handoffRemote avvolge fakeRemote: dal heartbeat numero afterHB in poi

@@ -20,7 +20,7 @@ import (
 	"os"
 	"time"
 
-	"mcsync/internal/auth"
+	"github.com/FedericoArdesi/mcsync/internal/auth"
 )
 
 const (

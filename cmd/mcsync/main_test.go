@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/api"
-	"mcsync/internal/tarutil"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/tarutil"
 )
 
 // memService è un servizio completo ma in memoria, abbastanza fedele da far

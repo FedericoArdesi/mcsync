@@ -20,13 +20,13 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/admin"
-	"mcsync/internal/api"
-	"mcsync/internal/archive"
-	"mcsync/internal/auth"
-	"mcsync/internal/protocol"
-	"mcsync/internal/tarutil"
-	"mcsync/internal/testutil"
+	"github.com/FedericoArdesi/mcsync/internal/admin"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/archive"
+	"github.com/FedericoArdesi/mcsync/internal/auth"
+	"github.com/FedericoArdesi/mcsync/internal/protocol"
+	"github.com/FedericoArdesi/mcsync/internal/tarutil"
+	"github.com/FedericoArdesi/mcsync/internal/testutil"
 )
 
 func runCmd(t *testing.T, args ...string) (code int, stdout, stderr string) {

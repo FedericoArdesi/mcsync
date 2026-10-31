@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/api"
-	"mcsync/internal/archive"
-	"mcsync/internal/client"
-	"mcsync/internal/tarutil"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/archive"
+	"github.com/FedericoArdesi/mcsync/internal/client"
+	"github.com/FedericoArdesi/mcsync/internal/tarutil"
 )
 
 // fakeRemote è un servizio in memoria: tiene le versioni come flussi di

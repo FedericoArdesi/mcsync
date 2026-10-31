@@ -6,8 +6,8 @@ import (
 	"context"
 	"errors"
 
-	"mcsync/internal/archive"
-	"mcsync/internal/protocol"
+	"github.com/FedericoArdesi/mcsync/internal/archive"
+	"github.com/FedericoArdesi/mcsync/internal/protocol"
 )
 
 var ErrUnknownVersion = errors.New("versione sconosciuta")

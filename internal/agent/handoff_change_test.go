@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/api"
 )
 
 // changingRemote simula la richiesta che cambia mentre l'host salva: dopo il

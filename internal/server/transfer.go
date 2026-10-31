@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"time"
 
-	"mcsync/internal/api"
-	"mcsync/internal/auth"
-	"mcsync/internal/tarutil"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/auth"
+	"github.com/FedericoArdesi/mcsync/internal/tarutil"
 )
 
 // upload riceve il mondo come flusso tar (tarutil.Pack), lo controlla, lo salva

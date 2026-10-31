@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/tarutil"
+	"github.com/FedericoArdesi/mcsync/internal/tarutil"
 )
 
 // TestFakeMinecraftProcess non è un test: è il finto server Minecraft. Il

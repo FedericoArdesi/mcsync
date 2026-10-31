@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/auth"
-	"mcsync/internal/protocol"
+	"github.com/FedericoArdesi/mcsync/internal/auth"
+	"github.com/FedericoArdesi/mcsync/internal/protocol"
 )
 
 func setup(t *testing.T) (*auth.Store, string) {

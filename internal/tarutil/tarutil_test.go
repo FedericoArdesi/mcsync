@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/testutil"
+	"github.com/FedericoArdesi/mcsync/internal/testutil"
 )
 
 // buildTar costruisce un archivio a mano, anche con voci che Pack non farebbe mai.

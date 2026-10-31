@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/api"
-	"mcsync/internal/archive"
-	"mcsync/internal/tarutil"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/archive"
+	"github.com/FedericoArdesi/mcsync/internal/tarutil"
 )
 
 var lim = tarutil.Limits{MaxFiles: 1000, MaxBytes: 1 << 30}

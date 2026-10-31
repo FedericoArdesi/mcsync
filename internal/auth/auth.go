@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"mcsync/internal/atomicfile"
-	"mcsync/internal/protocol"
+	"github.com/FedericoArdesi/mcsync/internal/atomicfile"
+	"github.com/FedericoArdesi/mcsync/internal/protocol"
 )
 
 const (

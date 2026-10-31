@@ -11,8 +11,8 @@ import (
 	"reflect"
 	"testing"
 
-	"mcsync/internal/archive"
-	"mcsync/internal/testutil"
+	"github.com/FedericoArdesi/mcsync/internal/archive"
+	"github.com/FedericoArdesi/mcsync/internal/testutil"
 )
 
 // Run esegue tutti i test del contratto. newStore deve restituire ogni volta

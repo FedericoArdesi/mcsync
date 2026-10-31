@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/archive"
-	"mcsync/internal/protocol"
-	"mcsync/internal/testutil"
+	"github.com/FedericoArdesi/mcsync/internal/archive"
+	"github.com/FedericoArdesi/mcsync/internal/protocol"
+	"github.com/FedericoArdesi/mcsync/internal/testutil"
 )
 
 type testClock struct{ t time.Time }

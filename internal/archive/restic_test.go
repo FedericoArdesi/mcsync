@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mcsync/internal/archive"
-	"mcsync/internal/archive/storetest"
+	"github.com/FedericoArdesi/mcsync/internal/archive"
+	"github.com/FedericoArdesi/mcsync/internal/archive/storetest"
 )
 
 // TestResticStoreContract usa il restic installato sul PC. Se non lo trova nel

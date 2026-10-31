@@ -27,10 +27,10 @@ import (
 	"syscall"
 	"time"
 
-	"mcsync/internal/agent"
-	"mcsync/internal/api"
-	"mcsync/internal/atomicfile"
-	"mcsync/internal/client"
+	"github.com/FedericoArdesi/mcsync/internal/agent"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/atomicfile"
+	"github.com/FedericoArdesi/mcsync/internal/client"
 )
 
 func main() {

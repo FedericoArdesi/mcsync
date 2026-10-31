@@ -31,11 +31,11 @@ import (
 	"sync"
 	"time"
 
-	"mcsync/internal/api"
-	"mcsync/internal/archive"
-	"mcsync/internal/atomicfile"
-	"mcsync/internal/client"
-	"mcsync/internal/tarutil"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/archive"
+	"github.com/FedericoArdesi/mcsync/internal/atomicfile"
+	"github.com/FedericoArdesi/mcsync/internal/client"
+	"github.com/FedericoArdesi/mcsync/internal/tarutil"
 )
 
 // Remote è il servizio visto dall'agente. *client.Client lo implementa; i test

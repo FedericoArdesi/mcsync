@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/api"
-	"mcsync/internal/client"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/client"
 )
 
 // fakeHandoffAPI risponde a Status con una sequenza decisa dal test (l'ultima

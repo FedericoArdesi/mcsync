@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/api"
-	"mcsync/internal/protocol"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/protocol"
 )
 
 func (c *client) requestHandoff() (api.HandoffRequest, int, api.ErrorBody) {

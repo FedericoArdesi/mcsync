@@ -12,14 +12,14 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/agent"
-	"mcsync/internal/api"
-	"mcsync/internal/archive"
-	"mcsync/internal/auth"
-	"mcsync/internal/client"
-	"mcsync/internal/protocol"
-	"mcsync/internal/server"
-	"mcsync/internal/service"
+	"github.com/FedericoArdesi/mcsync/internal/agent"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/archive"
+	"github.com/FedericoArdesi/mcsync/internal/auth"
+	"github.com/FedericoArdesi/mcsync/internal/client"
+	"github.com/FedericoArdesi/mcsync/internal/protocol"
+	"github.com/FedericoArdesi/mcsync/internal/server"
+	"github.com/FedericoArdesi/mcsync/internal/service"
 )
 
 // Il comando "mcsync handoff" contro il servizio vero: coordinatore vero,

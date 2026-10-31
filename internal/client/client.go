@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"mcsync/internal/api"
-	"mcsync/internal/tarutil"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/tarutil"
 )
 
 // APIError è un errore risposto dal servizio.

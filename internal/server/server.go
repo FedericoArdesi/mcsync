@@ -38,12 +38,12 @@ import (
 	"syscall"
 	"time"
 
-	"mcsync/internal/api"
-	"mcsync/internal/archive"
-	"mcsync/internal/auth"
-	"mcsync/internal/protocol"
-	"mcsync/internal/service"
-	"mcsync/internal/tarutil"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/archive"
+	"github.com/FedericoArdesi/mcsync/internal/auth"
+	"github.com/FedericoArdesi/mcsync/internal/protocol"
+	"github.com/FedericoArdesi/mcsync/internal/service"
+	"github.com/FedericoArdesi/mcsync/internal/tarutil"
 )
 
 const (

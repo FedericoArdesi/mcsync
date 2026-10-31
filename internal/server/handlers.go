@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"mcsync/internal/api"
-	"mcsync/internal/auth"
-	"mcsync/internal/protocol"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/auth"
+	"github.com/FedericoArdesi/mcsync/internal/protocol"
 )
 
 // enroll registra un dispositivo nuovo con un codice di invito (8.3). È l'unica

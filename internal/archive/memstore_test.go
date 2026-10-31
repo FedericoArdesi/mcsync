@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"mcsync/internal/testutil"
+	"github.com/FedericoArdesi/mcsync/internal/testutil"
 )
 
 func TestExcluded(t *testing.T) {

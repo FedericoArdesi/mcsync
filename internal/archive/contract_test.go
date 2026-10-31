@@ -3,8 +3,8 @@ package archive_test
 import (
 	"testing"
 
-	"mcsync/internal/archive"
-	"mcsync/internal/archive/storetest"
+	"github.com/FedericoArdesi/mcsync/internal/archive"
+	"github.com/FedericoArdesi/mcsync/internal/archive/storetest"
 )
 
 func TestMemStoreContract(t *testing.T) {

@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/agent"
-	"mcsync/internal/api"
-	apiclient "mcsync/internal/client"
+	"github.com/FedericoArdesi/mcsync/internal/agent"
+	"github.com/FedericoArdesi/mcsync/internal/api"
+	apiclient "github.com/FedericoArdesi/mcsync/internal/client"
 )
 
 func e2eOptions(t *testing.T) agent.Options {

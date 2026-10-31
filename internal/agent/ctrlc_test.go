@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/api"
 )
 
 // cancelAfterCommit simula il Ctrl+C che arriva mentre un upload è in volo:

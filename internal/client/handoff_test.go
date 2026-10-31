@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"mcsync/internal/api"
+	"github.com/FedericoArdesi/mcsync/internal/api"
 )
 
 var handoffAt = time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
