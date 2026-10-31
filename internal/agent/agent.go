@@ -177,6 +177,12 @@ type session struct {
 	lastFP         string // impronta del mondo all'ultimo stato confermato dal servizio
 
 	fatalCh chan error
+
+	// passaggio di host (6.7): il heartbeat dice che qualcuno ha chiesto di
+	// diventare host. handoffTo è il giocatore a cui rilasciare la lease.
+	handoffMu sync.Mutex
+	handoffTo string
+	handoffCh chan struct{}
 }
 
 // Run fa una sessione di gioco completa e torna quando è finita: Ctrl+C
@@ -199,7 +205,7 @@ func Run(ctx context.Context, r Remote, o Options) error {
 	if err := os.MkdirAll(o.WorkDir, 0o755); err != nil {
 		return err
 	}
-	s := &session{r: r, o: o, log: o.Log, fatalCh: make(chan error, 1)}
+	s := &session{r: r, o: o, log: o.Log, fatalCh: make(chan error, 1), handoffCh: make(chan struct{})}
 
 	if s.st, err = ReadState(o.WorkDir); err != nil {
 		return err
@@ -275,6 +281,9 @@ func (s *session) playLoop(ctx context.Context) error {
 		case <-s.o.Game.Done():
 			s.log.Info("il gioco è terminato")
 			return nil
+		case <-s.handoffCh:
+			s.log.Info("un altro giocatore ha chiesto di diventare host: salvo e passo la mano", "a", s.handoffTarget())
+			return nil
 		case err := <-s.fatalCh:
 			return err
 		case <-t.C:
@@ -329,7 +338,8 @@ func (s *session) stopGame(ctx context.Context) error {
 func (s *session) releaseQuietly(ctx context.Context) {
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.o.CallTimeout)
 	defer cancel()
-	if err := s.r.Release(rctx, s.gen, ""); err != nil {
+	// con un passaggio di host in corso la lease va al richiedente (6.7)
+	if err := s.r.Release(rctx, s.gen, s.handoffTarget()); err != nil {
 		s.log.Warn("lease non rilasciata (scadrà da sola)", "errore", err)
 	}
 }
@@ -484,13 +494,16 @@ func (s *session) heartbeatLoop(ctx context.Context) {
 		case <-t.C:
 		}
 		cctx, cancel := context.WithTimeout(ctx, s.o.CallTimeout)
-		_, err := s.r.Heartbeat(cctx, s.gen)
+		l, err := s.r.Heartbeat(cctx, s.gen)
 		cancel()
 		if ctx.Err() != nil {
 			return
 		}
 		if err == nil {
 			lastOK, warned = time.Now(), false
+			if l.Handoff != nil {
+				s.noteHandoff(l.Handoff.To)
+			}
 			continue
 		}
 		if isDefinitive(err) {
@@ -605,6 +618,24 @@ func (s *session) reconcile(ctx context.Context) {
 			s.log.Warn("stato locale non salvato", "errore", err)
 		}
 	}
+}
+
+// noteHandoff ricorda chi ha chiesto di diventare host e sveglia il ciclo
+// della partita (una volta sola: la richiesta torna a ogni heartbeat).
+func (s *session) noteHandoff(to string) {
+	s.handoffMu.Lock()
+	defer s.handoffMu.Unlock()
+	if s.handoffTo != "" || to == "" {
+		return
+	}
+	s.handoffTo = to
+	close(s.handoffCh)
+}
+
+func (s *session) handoffTarget() string {
+	s.handoffMu.Lock()
+	defer s.handoffMu.Unlock()
+	return s.handoffTo
 }
 
 func (s *session) saveState() error {
