@@ -52,6 +52,10 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request, dev auth.Device)
 	if res := s.coord.State().Reservation; res != nil && now.Before(res.Until) {
 		st.Reservation = &api.Reservation{For: res.For, Until: res.Until, ExpiresInSeconds: secondsUntil(res.Until, now)}
 	}
+	if hr, ok := s.coord.PendingHandoff(); ok {
+		dto := handoffDTO(hr)
+		st.Handoff = &dto
+	}
 	writeJSON(w, http.StatusOK, st)
 }
 
@@ -75,7 +79,12 @@ func (s *Server) heartbeat(w http.ResponseWriter, r *http.Request, dev auth.Devi
 		s.fail(w, r, err, "")
 		return
 	}
-	writeJSON(w, http.StatusOK, leaseDTO(l, s.clock.Now()))
+	dto := leaseDTO(l, s.clock.Now())
+	if hr, ok := s.coord.PendingHandoff(); ok {
+		hd := handoffDTO(hr)
+		dto.Handoff = &hd
+	}
+	writeJSON(w, http.StatusOK, dto)
 }
 
 func (s *Server) release(w http.ResponseWriter, r *http.Request, dev auth.Device) {
@@ -116,4 +125,31 @@ func secondsUntil(t, now time.Time) int {
 		return s
 	}
 	return 0
+}
+
+// handoffRequest: il giocatore del token chiede di diventare host (6.7).
+// Chi chiede si ricava dal token; la richiesta non ha corpo.
+func (s *Server) handoffRequest(w http.ResponseWriter, r *http.Request, dev auth.Device) {
+	h, err := s.coord.RequestHandoff(dev.Player, dev.ID)
+	if err != nil {
+		s.fail(w, r, err, "")
+		return
+	}
+	s.log.Info("passaggio di host richiesto", "from", h.From, "to", dev.Player, "device", dev.ID)
+	writeJSON(w, http.StatusOK, handoffDTO(h))
+}
+
+// handoffCancel: chi ha fatto la richiesta la ritira, prima o dopo il
+// rilascio dell'host.
+func (s *Server) handoffCancel(w http.ResponseWriter, r *http.Request, dev auth.Device) {
+	if err := s.coord.CancelHandoff(dev.Player, dev.ID); err != nil {
+		s.fail(w, r, err, "")
+		return
+	}
+	s.log.Info("passaggio di host ritirato", "player", dev.Player, "device", dev.ID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func handoffDTO(h protocol.HandoffRequest) api.HandoffRequest {
+	return api.HandoffRequest{From: h.From, To: h.To, ToDevice: h.ToDevice, At: h.At}
 }

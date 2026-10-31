@@ -162,6 +162,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST "+api.PathAcquire, s.authed(s.acquire))
 	mux.HandleFunc("POST "+api.PathHeartbeat, s.authed(s.heartbeat))
 	mux.HandleFunc("POST "+api.PathRelease, s.authed(s.release))
+	mux.HandleFunc("POST "+api.PathHandoffRequest, s.authed(s.handoffRequest))
+	mux.HandleFunc("POST "+api.PathHandoffCancel, s.authed(s.handoffCancel))
 	mux.HandleFunc("POST "+api.PathUpload, s.authed(s.upload))
 	mux.HandleFunc("GET "+api.PathDownload, s.authed(s.download))
 	return s.logging(s.protocolCheck(mux))
@@ -385,6 +387,14 @@ func classify(err error) (status int, code, msg string) {
 		return 409, api.CodeStaleGeneration, protocol.ErrStaleGeneration.Error()
 	case errors.Is(err, protocol.ErrParentMismatch):
 		return 409, api.CodeParentMismatch, protocol.ErrParentMismatch.Error()
+	case errors.Is(err, protocol.ErrAlreadyHost):
+		return 409, api.CodeAlreadyHost, protocol.ErrAlreadyHost.Error()
+	case errors.Is(err, protocol.ErrHandoffPending):
+		return 409, api.CodeHandoffPending, protocol.ErrHandoffPending.Error()
+	case errors.Is(err, protocol.ErrNoHandoff):
+		return 409, api.CodeNoHandoff, protocol.ErrNoHandoff.Error()
+	case errors.Is(err, protocol.ErrNotRequester):
+		return 403, api.CodeNotRequester, protocol.ErrNotRequester.Error()
 	case errors.Is(err, service.ErrUnknownVersion):
 		return 404, api.CodeUnknownVersion, service.ErrUnknownVersion.Error()
 	case errors.Is(err, archive.ErrNotFound), errors.Is(err, archive.ErrCorrupt):
