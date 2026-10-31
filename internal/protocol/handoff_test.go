@@ -183,6 +183,7 @@ func TestCancelDuringReservationLetsOldHostResume(t *testing.T) {
 func TestExpiredReservationCannotBeCancelled(t *testing.T) {
 	c, clk := newTest()
 	a, _ := c.Acquire("A", "pcA")
+	_, _ = c.RequestHandoff("B", "pcB")
 	_ = c.Release("A", "pcA", a.Generation, "B")
 	clk.Advance(HandoffReservation + time.Second)
 	if err := c.CancelHandoff("B", "pcB"); !errors.Is(err, ErrNoHandoff) {

@@ -168,3 +168,55 @@ func (c *client) mustRequestHandoff() {
 		c.t.Fatalf("%s doveva poter chiedere il passaggio: %d %v", c.player, code, eb)
 	}
 }
+
+// Seconda difesa (6.7): handoff_to riserva la lease solo al giocatore che ha
+// davvero una richiesta in corso. Se la richiesta è stata ritirata mentre
+// l'host chiudeva, il rilascio riesce lo stesso (204) ma la lease resta libera.
+func TestReleaseWithWithdrawnRequestDoesNotReserve(t *testing.T) {
+	e := newEnv(t)
+	fede := e.enroll("Fede")
+	ale := e.enroll("Ale")
+	gio := e.enroll("Gio")
+	l := fede.mustAcquire()
+
+	if _, code, eb := ale.requestHandoff(); code != 200 {
+		t.Fatalf("richiesta di Ale: %d %v", code, eb)
+	}
+	if code, eb := ale.cancelHandoff(); code != 204 {
+		t.Fatalf("ritiro di Ale: %d %v", code, eb)
+	}
+	// Fede non lo sa ancora e rilascia ad Ale
+	if code, eb := fede.release(l.Generation, "Ale"); code != 204 {
+		t.Fatalf("il rilascio doveva riuscire comunque: %d %v", code, eb)
+	}
+	st, _, _ := gio.status()
+	if st.Lease != nil || st.Reservation != nil {
+		t.Fatalf("nessuna riserva attesa: %+v %+v", st.Lease, st.Reservation)
+	}
+	if _, code, eb := gio.acquire(); code != 200 {
+		t.Fatalf("Gio doveva poter prendere la lease subito: %d %v", code, eb)
+	}
+}
+
+// Un handoff_to diverso dal richiedente non dirotta la riserva.
+func TestReleaseToNonRequesterDoesNotReserve(t *testing.T) {
+	e := newEnv(t)
+	fede := e.enroll("Fede")
+	ale := e.enroll("Ale")
+	gio := e.enroll("Gio")
+	l := fede.mustAcquire()
+
+	if _, code, eb := ale.requestHandoff(); code != 200 {
+		t.Fatalf("richiesta di Ale: %d %v", code, eb)
+	}
+	if code, eb := fede.release(l.Generation, "Gio"); code != 204 {
+		t.Fatalf("il rilascio doveva riuscire comunque: %d %v", code, eb)
+	}
+	st, _, _ := ale.status()
+	if st.Reservation != nil {
+		t.Fatalf("nessuna riserva attesa (né per Gio né per Ale): %+v", st.Reservation)
+	}
+	if _, code, eb := gio.acquire(); code != 200 {
+		t.Fatalf("Gio doveva poter prendere la lease: %d %v", code, eb)
+	}
+}

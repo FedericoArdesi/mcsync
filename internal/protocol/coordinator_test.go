@@ -187,6 +187,7 @@ func TestNoSpace(t *testing.T) {
 func TestHandoffReservationBlocksThirdPlayer(t *testing.T) {
 	c, clk := newTest()
 	a, _ := c.Acquire("A", "pcA")
+	_, _ = c.RequestHandoff("B", "pcB")
 	if err := c.Release("A", "pcA", a.Generation, "B"); err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +205,11 @@ func TestHandoffReservationBlocksThirdPlayer(t *testing.T) {
 func TestHandoffReservationExpires(t *testing.T) {
 	c, clk := newTest()
 	a, _ := c.Acquire("A", "pcA")
+	_, _ = c.RequestHandoff("B", "pcB")
 	_ = c.Release("A", "pcA", a.Generation, "B")
+	if _, err := c.Acquire("C", "pcC"); !errors.Is(err, ErrReserved) {
+		t.Fatalf("prima della scadenza C doveva essere fermo: %v", err)
+	}
 	clk.Advance(HandoffReservation + time.Second)
 	if _, err := c.Acquire("C", "pcC"); err != nil {
 		t.Fatalf("la riserva è scaduta, C doveva poter entrare: %v", err)

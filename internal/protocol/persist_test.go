@@ -125,6 +125,7 @@ func TestSaveFailureRollsBackCommit(t *testing.T) {
 func TestSaveFailureRollsBackRelease(t *testing.T) {
 	c, _, s := newPersistentTest(t)
 	a, _ := c.Acquire("A", "pcA")
+	_, _ = c.RequestHandoff("B", "pcB")
 	s.fail = errors.New("disco pieno")
 	if err := c.Release("A", "pcA", a.Generation, "B"); !errors.Is(err, ErrPersist) {
 		t.Fatalf("atteso ErrPersist, ottenuto %v", err)

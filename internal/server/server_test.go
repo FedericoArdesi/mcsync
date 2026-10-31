@@ -663,6 +663,9 @@ func TestLeaseFlow(t *testing.T) {
 	if cur, ok := e.coord.CurrentLease(); !ok || cur.Generation != 1 {
 		t.Fatal("un rilascio rifiutato non deve toccare la lease")
 	}
+	if _, code, eb := ale.requestHandoff(); code != 200 {
+		t.Fatalf("richiesta di passaggio di Ale: %d %v", code, eb)
+	}
 	if code, eb := fede.release(l.Generation, "Ale"); code != 204 {
 		t.Fatalf("rilascio con passaggio ad Ale: %d %v", code, eb)
 	}
@@ -681,6 +684,9 @@ func TestLeaseFlow(t *testing.T) {
 	}
 
 	// la riserva scade dopo 3 minuti
+	if _, code, eb := fede.requestHandoff(); code != 200 {
+		t.Fatalf("richiesta di passaggio di Fede: %d %v", code, eb)
+	}
 	if code, eb := ale.release(l2.Generation, "Fede"); code != 204 {
 		t.Fatalf("secondo passaggio: %d %v", code, eb)
 	}

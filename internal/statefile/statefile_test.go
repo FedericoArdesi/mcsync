@@ -140,6 +140,9 @@ func TestHandoffReservationSurvivesRestart(t *testing.T) {
 	path, clk := statePath(t), newClock()
 	c := mustOpen(t, path, clk)
 	a, _ := c.Acquire("A", "pcA")
+	if _, err := c.RequestHandoff("B", "pcB"); err != nil {
+		t.Fatal(err)
+	}
 	if err := c.Release("A", "pcA", a.Generation, "B"); err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +287,7 @@ func TestRestartBeforeEveryOperationChangesNothing(t *testing.T) {
 				p := players[rng.Intn(len(players))]
 				var errRef, errDut error
 				op := ""
-				switch rng.Intn(6) {
+				switch rng.Intn(8) {
 				case 0:
 					d := []time.Duration{10 * time.Second, time.Minute, 4 * time.Minute, 9 * time.Minute, 11 * time.Minute}[rng.Intn(5)]
 					clk.Advance(d)
@@ -321,6 +324,14 @@ func TestRestartBeforeEveryOperationChangesNothing(t *testing.T) {
 					}
 					errRef = ref.Release(p, devOf(p), gen[p], to)
 					errDut = dut.Release(p, devOf(p), gen[p], to)
+				case 6:
+					op = "request handoff " + p
+					_, errRef = ref.RequestHandoff(p, devOf(p))
+					_, errDut = dut.RequestHandoff(p, devOf(p))
+				case 7:
+					op = "cancel handoff " + p
+					errRef = ref.CancelHandoff(p, devOf(p))
+					errDut = dut.CancelHandoff(p, devOf(p))
 				}
 				if fmt.Sprint(errRef) != fmt.Sprint(errDut) {
 					t.Fatalf("passo %d (%s): errori diversi: %v / %v", step, op, errRef, errDut)

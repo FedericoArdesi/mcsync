@@ -180,8 +180,12 @@ func (c *Coordinator) Heartbeat(player, device string, gen uint64) (Lease, error
 	return *c.lease, nil
 }
 
-// Release rilascia la lease. Se handoffTo non è vuoto, la lease resta
-// riservata a quel giocatore per HandoffReservation. Va chiamata solo dopo la
+// Release rilascia la lease. Se handoffTo è il giocatore della richiesta di
+// passaggio in corso, la lease resta riservata a lui per HandoffReservation.
+// Se handoffTo è vuoto, o non coincide con il richiedente (richiesta ritirata
+// o cambiata mentre l'host chiudeva), la lease si rilascia comunque, ma libera:
+// la decisione la prende il coordinatore, sotto lo stesso blocco, così non
+// dipende da cosa l'host ha visto per ultimo. Va chiamata solo dopo la
 // conferma del commit finale (6.6).
 func (c *Coordinator) Release(player, device string, gen uint64, handoffTo string) error {
 	c.mu.Lock()
@@ -192,10 +196,11 @@ func (c *Coordinator) Release(player, device string, gen uint64, handoffTo strin
 	if c.lease.Generation != gen || c.lease.Player != player || c.lease.Device != device {
 		return ErrStaleGeneration
 	}
+	reserve := handoffTo != "" && c.handoff != nil && c.handoff.To == handoffTo
 	u := c.markLocked()
 	c.lease = nil
 	c.handoff = nil // con la lease finisce anche la richiesta
-	if handoffTo != "" {
+	if reserve {
 		c.reservation = &Reservation{For: handoffTo, Until: c.clock.Now().Add(HandoffReservation)}
 	}
 	return c.persistLocked(u)
