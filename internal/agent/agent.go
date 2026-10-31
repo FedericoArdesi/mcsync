@@ -535,6 +535,9 @@ func (s *session) uploadCycle(ctx context.Context) error {
 // finalUpload: gioco già fermo, si carica direttamente dal mondo (nessuno lo
 // modifica più), con qualche tentativo.
 func (s *session) finalUpload(ctx context.Context) error {
+	// Un upload interrotto dal Ctrl+C può essere stato confermato dal servizio
+	// senza che l'agente lo sappia: si riallinea la base prima di caricare.
+	s.reconcile(ctx)
 	fp := fingerprint(s.o.World)
 	if fp == s.lastFP {
 		s.log.Info("nessuna modifica dall'ultimo salvataggio: niente da caricare")
