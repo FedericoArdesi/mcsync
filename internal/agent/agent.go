@@ -336,10 +336,11 @@ func (s *session) stopGame(ctx context.Context) error {
 }
 
 func (s *session) releaseQuietly(ctx context.Context) {
+	to := s.handoffTargetNow(ctx)
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.o.CallTimeout)
 	defer cancel()
 	// con un passaggio di host in corso la lease va al richiedente (6.7)
-	if err := s.r.Release(rctx, s.gen, s.handoffTarget()); err != nil {
+	if err := s.r.Release(rctx, s.gen, to); err != nil {
 		s.log.Warn("lease non rilasciata (scadrà da sola)", "errore", err)
 	}
 }
@@ -630,6 +631,30 @@ func (s *session) noteHandoff(to string) {
 	}
 	s.handoffTo = to
 	close(s.handoffCh)
+}
+
+// handoffTargetNow dice a chi rilasciare la lease dopo aver riguardato lo
+// stato: mentre l'host salvava la richiesta può essere stata ritirata (la
+// lease non va riservata a chi non aspetta più) o sostituita da un'altra.
+// Se il laptop non risponde vale l'ultima richiesta vista; se poi il
+// richiedente si ritira dopo il rilascio, ci pensa il suo ritiro a liberare
+// la riserva.
+func (s *session) handoffTargetNow(ctx context.Context) string {
+	to := s.handoffTarget()
+	if to == "" {
+		return ""
+	}
+	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.o.CallTimeout)
+	defer cancel()
+	l, err := s.r.Heartbeat(cctx, s.gen)
+	if err != nil {
+		return to
+	}
+	if l.Handoff == nil {
+		s.log.Info("la richiesta di passaggio è stata ritirata: rilascio senza riservare la lease", "era_per", to)
+		return ""
+	}
+	return l.Handoff.To
 }
 
 func (s *session) handoffTarget() string {
