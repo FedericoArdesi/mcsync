@@ -121,6 +121,20 @@ func (c *Client) Heartbeat(ctx context.Context, generation uint64) (api.Lease, e
 	return l, err
 }
 
+// RequestHandoff chiede di diventare host mentre un altro ospita (6.7). Chi
+// chiede è il dispositivo del token; la richiesta non ha corpo. Ripeterla è
+// sicuro: il servizio restituisce quella già fatta.
+func (c *Client) RequestHandoff(ctx context.Context) (api.HandoffRequest, error) {
+	var h api.HandoffRequest
+	err := c.doJSON(ctx, http.MethodPost, api.PathHandoffRequest, nil, &h)
+	return h, err
+}
+
+// CancelHandoff ritira la richiesta fatta da questo dispositivo, prima o dopo
+// il rilascio dell'host.
+func (c *Client) CancelHandoff(ctx context.Context) error {
+	return c.doJSON(ctx, http.MethodPost, api.PathHandoffCancel, nil, nil)
+}
 func (c *Client) Release(ctx context.Context, generation uint64, handoffTo string) error {
 	return c.doJSON(ctx, http.MethodPost, api.PathRelease, api.ReleaseRequest{Generation: generation, HandoffTo: handoffTo}, nil)
 }
