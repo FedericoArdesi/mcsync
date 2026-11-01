@@ -1,91 +1,123 @@
-# mcsync
+<h1 align="center">mcsync</h1>
 
-*A shared Minecraft Java world for a small group of friends, without a 24/7 server: whoever plays hosts, an always-on laptop keeps the world, the versions and the "who is host" lease. Alpha — see [Status](#stato).*
+<p align="center">
+  Shared Minecraft Java worlds for small groups of friends, without a 24/7 game server.
+</p>
 
-Un mondo Minecraft Java condiviso tra amici, senza un server sempre acceso. Il server di gioco gira sul PC di chi gioca; un laptop (o un mini-PC) sempre acceso tiene il mondo, le versioni e la **lease**, cioè "chi è l'host adesso". Nessun costo di hosting, nessuna perdita di dati, trasferimenti incrementali.
+<p align="center">
+  <a href="https://github.com/FedericoArdesi/mcsync/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/FedericoArdesi/mcsync/actions/workflows/test.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <img alt="Go 1.22+" src="https://img.shields.io/badge/go-1.22%2B-00ADD8.svg">
+  <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-orange.svg">
+</p>
 
-> mcsync non è affiliato a Mojang, Microsoft o Minecraft. "Minecraft" è un marchio dei rispettivi proprietari. Il programma non contiene né distribuisce nulla di Minecraft: serve il tuo `server.jar`.
+Whoever wants to play becomes the host and runs the server on their own PC. A small always-on machine, such as a spare laptop or mini-PC, stores the world and its version history and keeps track of who the current host is. There are no hosting costs and no diverging copies of the world.
 
-## Stato
+> **Alpha.** The core is feature-complete and covered by an extensive test suite, but it has so far been exercised mainly with a simulated game server. Do not use it as the only copy of a world you care about. See [Limitations](docs/limitations.md).
 
-**Alpha.** Il nucleo è completo e ha una suite di test estesa (protocollo, servizio, agente, passaggio di host, comandi), ma **è stato provato solo con un gioco simulato**, non ancora su un mondo Minecraft vero con mod e giocatori collegati. Non usarlo come unica copia di un mondo a cui tieni.
+*mcsync is not affiliated with Mojang, Microsoft or Minecraft. It does not include or distribute any Minecraft software; you provide your own `server.jar`.*
 
-Cosa non c'è ancora: interfaccia web, bot Telegram, sito di stato, trasferimento automatico dei giocatori al nuovo host durante un passaggio. Vedi [Limiti noti](#limiti-noti).
+## Features
 
-## Come funziona
+- **One host at a time.** A lease held on the always-on machine guarantees that the world never forks.
+- **Versioned, deduplicated storage** backed by [restic](https://restic.net). Every save is a new version; nothing is overwritten.
+- **Automatic saves** every 10 minutes while playing, plus a final save on shutdown.
+- **Host handoff.** A player can ask the current host to save and pass the lease on, with no manual coordination.
+- **Fail-safe.** If the always-on machine becomes unreachable, the host's server stops cleanly before the lease expires. Uploads that cannot be committed are kept for recovery, never discarded.
+- **Private by design.** No open ports on your router, per-device revocable tokens, built to run over a private network such as [Tailscale](https://tailscale.com).
+- **No external dependencies.** Written in Go, one binary per role.
 
-Ci sono due programmi:
+## How it works
 
-- **`mcsyncd`** gira sul laptop sempre acceso. Offre una API HTTP, tiene l'archivio delle versioni del mondo (con [restic](https://restic.net)), emette inviti e gestisce i dispositivi.
-- **`mcsync`** gira sul PC di chi vuole giocare. Scarica l'ultima versione, avvia il server Minecraft, lo comanda dallo stdin (niente RCON), ogni 10 minuti salva e carica sul laptop, e alla chiusura carica la versione finale e rilascia la lease.
+mcsync has two programs. **`mcsyncd`** runs on the always-on machine and owns the lease, the version history and the archive. **`mcsync`** runs on each player's PC, controls the Minecraft server and keeps the world in sync.
 
-Regole principali:
+```mermaid
+flowchart LR
+    subgraph HOST["Host PC"]
+        MC["Minecraft<br/>server"]:::game
+        A1["mcsync"]:::agent
+    end
 
-- **Un solo host alla volta.** La lease dura 10 minuti, si rinnova con un heartbeat ogni minuto, e conta solo l'orologio del laptop. Ogni nuova lease incrementa una generazione.
-- **Una versione diventa ufficiale solo se** i blocchi sono integri, la generazione è quella giusta, la base coincide con il puntatore ufficiale (compare-and-swap) e lo spazio basta. Altrimenti l'upload finisce tra gli orfani, senza perdersi.
-- **Passaggio di host.** Se un altro gioca, `mcsync handoff` gli chiede di salvare e passarti la mano: lui ferma il gioco, carica e rilascia, la lease resta riservata a te per 3 minuti, poi parti dalla sua versione.
-- **Se il laptop non risponde**, l'host si ferma da solo prima che la lease scada (avviso a 3 minuti, stop a 8).
-- **Rete privata.** Pensato per girare su [Tailscale](https://tailscale.com) (o una rete simile): nessuna porta aperta sul router. L'accesso usa token per dispositivo, revocabili.
+    subgraph OTHER["Other player's PC"]
+        A2["mcsync"]:::agent
+    end
 
-## Requisiti
+    subgraph HUB["Always-on machine"]
+        D["mcsyncd"]:::service
+        R[("restic<br/>archive")]:::store
+    end
 
-- **Laptop (`mcsyncd`)**: Linux (sviluppato su Ubuntu), [restic](https://restic.net) nel `PATH`, un indirizzo di rete privata (per esempio quello di Tailscale).
-- **PC dei giocatori (`mcsync`)**: Windows o Linux, e per giocare davvero Java e un `server.jar` di Minecraft. Senza `--server-jar` parte un gioco finto, utile per provare tutto il giro.
-- **Go 1.22 o successivo** per compilare. Nessuna dipendenza esterna.
+    MC <-->|"console"| A1
+    A1 <-->|"lease, heartbeat,<br/>world saves"| D
+    A2 <-->|"status,<br/>handoff request"| D
+    D --- R
 
-## Installazione
-
-```sh
-go install github.com/FedericoArdesi/mcsync/cmd/mcsyncd@latest   # sul laptop
-go install github.com/FedericoArdesi/mcsync/cmd/mcsync@latest    # sui PC dei giocatori
+    classDef agent fill:#DBEAFE,stroke:#2563EB,color:#0F172A
+    classDef service fill:#DCFCE7,stroke:#16A34A,color:#0F172A
+    classDef store fill:#FEF3C7,stroke:#D97706,color:#0F172A
+    classDef game fill:#F1F5F9,stroke:#64748B,color:#0F172A
+    style HOST fill:none,stroke:#94A3B8,stroke-dasharray:5 5
+    style OTHER fill:none,stroke:#94A3B8,stroke-dasharray:5 5
+    style HUB fill:none,stroke:#94A3B8,stroke-dasharray:5 5
 ```
 
-Oppure, dalla cartella del progetto: `go build ./cmd/mcsync ./cmd/mcsyncd`.
+For the protocol in detail (lease, commits, sessions, handoff, failure behaviour), see [Architecture](docs/architecture.md).
 
-## Avvio rapido
+## Requirements
 
-**Sul laptop**
+- **Always-on machine:** Linux (developed on Ubuntu Server), [restic](https://restic.net) in `PATH`, and an address on a private network.
+- **Player PCs:** Windows or Linux. Real play needs Java and a Minecraft `server.jar`. Without `--server-jar`, `mcsync` runs a simulated game, which is useful for trying out the whole workflow.
+- **Go 1.22 or later** to build from source.
+
+## Installation
+
+```sh
+git clone https://github.com/FedericoArdesi/mcsync.git
+cd mcsync
+go build ./cmd/mcsync ./cmd/mcsyncd
+```
+
+Copy `mcsyncd` to the always-on machine and `mcsync` to each player's PC.
+
+## Quick start
+
+**1. Set up the always-on machine**
 
 ```sh
 mcsyncd init   --data /srv/mcsync
 mcsyncd serve  --data /srv/mcsync --listen 100.x.y.z:8765
-mcsyncd invite --data /srv/mcsync --addr 100.x.y.z:8765 Fede   # un invito per giocatore
+mcsyncd invite --data /srv/mcsync --addr 100.x.y.z:8765 player1
 ```
 
-`100.x.y.z` è l'indirizzo del laptop sulla rete privata. Il nome del giocatore ha 3-16 caratteri tra lettere, cifre e trattino basso. Altri comandi: `mcsyncd devices` elenca i dispositivi, `mcsyncd revoke ID` ne revoca uno.
+`100.x.y.z:8765` is the machine's address on your private network. `init` generates the archive encryption key; **back it up outside the machine**, because without it saved worlds cannot be read. The invite code is single-use and expires after 24 hours.
 
-**Sul PC di un giocatore**
+**2. Enroll each player's PC**
 
 ```sh
-mcsync enroll CODICE --label "PC di Fede"        # una volta sola, con il codice dell'invito
-mcsync status                                     # chi è host, versione ufficiale
-mcsync run --world C:\mondi\survival \
-           --server-jar C:\server\server.jar \
-           --java "C:\Program Files\Java\bin\java.exe" \
-           --jvm-args "-Xmx4G"                    # avvia la sessione; Ctrl+C salva e rilascia
-mcsync handoff --world C:\mondi\survival ...      # come run, ma chiede prima il passaggio a chi sta giocando
+mcsync enroll <invite-code> --label "Player 1 PC"
 ```
 
-Con `mcsync <comando> -h` si vedono tutte le opzioni (ogni quanto salvare, ogni quanto rinnovare la lease, timeout del passaggio e altre).
-
-## Limiti noti
-
-- Provato solo con il gioco finto: tempi di stop e salvataggio finale, e cosa succede ai giocatori collegati durante un passaggio di host, con Minecraft vero sono da verificare.
-- Un passaggio di host non sposta da solo i giocatori sul nuovo server: devono riconnettersi.
-- Non verificati: layout del mondo per versioni vecchie e per Paper, file `*_old`, comportamento a server in pausa, Java per loader vecchi.
-- Test di rete reale (relay Tailscale, banda tra case diverse) non fatto.
-- Con un motore di archivio esterno resta da definire come impedire ai client di cancellare versioni.
-- I commenti nel codice e i messaggi sono in italiano, e alcuni rimandano a sezioni di un documento di progetto non incluso in questa repository.
-
-## Sviluppo
+**3. Play**
 
 ```sh
-go vet ./...
-go test ./...
+mcsync run --world /path/to/world --server-jar /path/to/server.jar --jvm-args "-Xmx4G"
 ```
 
-La CI (GitHub Actions) esegue gli stessi comandi su Linux e Windows a ogni push.
+`Ctrl+C` stops the server, saves the world and releases the lease. If another player is currently hosting, use `mcsync handoff` with the same options to ask them to pass the lease on.
 
-## Licenza
+A step-by-step setup, including running `mcsyncd` as a service, is in [Deployment](docs/deployment.md).
 
-[MIT](LICENSE).
+## Documentation
+
+| Document | Contents |
+| --- | --- |
+| [Architecture](docs/architecture.md) | Components, lease and version rules, session lifecycle, host handoff, failure behaviour |
+| [Deployment](docs/deployment.md) | Setting up the always-on machine and player PCs, running as a service, data layout |
+| [Command reference](docs/commands.md) | All commands and options for `mcsyncd` and `mcsync` |
+| [Security](docs/security.md) | Network exposure, tokens, invites, encryption |
+| [Limitations and roadmap](docs/limitations.md) | Known limitations and planned features |
+| [Development](docs/development.md) | Code layout, running the tests, the simulated game |
+
+## License
+
+Released under the [MIT License](LICENSE).
